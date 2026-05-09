@@ -154,7 +154,7 @@ async def download_video(background_tasks: BackgroundTasks, url: str = Form(...)
             'quiet': False,
             'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
             'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
-            'ffmpeg_location': os.getcwd(),
+            
         }
 
         if mode == "audio":
