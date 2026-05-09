@@ -159,6 +159,7 @@ async def download_video(background_tasks: BackgroundTasks, url: str = Form(...)
 
         if mode == "audio":
             ydl_opts.update({
+                # bestaudio/best скачает лучший звук, а FFmpegExtractAudio переконвертирует его в mp3
                 'format': 'bestaudio/best',
                 'postprocessors': [{
                     'key': 'FFmpegExtractAudio',
@@ -172,34 +173,16 @@ async def download_video(background_tasks: BackgroundTasks, url: str = Form(...)
                 ydl_opts.update({
                     'format': 'best' if "rutube.ru" in url else format_id,
                     'merge_output_format': 'mp4',
+                    # ИСПРАВЛЕНИЕ: Говорим yt-dlp самому убрать аудио (-an) без использования subprocess
+                    'postprocessor_args': ['-an', '-c:v', 'copy']
                 })
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    ydl.download([url])
-
-                found = glob.glob(os.path.join(DOWNLOAD_DIR, f"file_{temp_id}.*"))
-                if not found:
-                    return {"error": "Файл не скачался"}
-
-                input_file = found[0]
-                silent_file = os.path.join(DOWNLOAD_DIR, f"silent_{temp_id}.mp4")
-
-                subprocess.run([
-                    ffmpeg_path, '-i', input_file,
-                    '-an', '-c:v', 'copy',
-                    silent_file, '-y'
-                ], check=True)
-
-                os.remove(input_file)
-
-                background_tasks.add_task(lambda f: (time.sleep(600), os.remove(f) if os.path.exists(f) else None), silent_file)
-                return FileResponse(silent_file, filename=f"video_only_{temp_id}.mp4", media_type="video/mp4")
             else:
                 ydl_opts.update({
                     'format': f'bestvideo[height<={format_id}]',
                     'postprocessor_args': ['-an', '-c:v', 'libx264', '-pix_fmt', 'yuv420p']
                 })
 
-        else:
+        else: # Full Video
             if is_vk:
                 ydl_opts.update({
                     'format': format_id,
@@ -217,6 +200,7 @@ async def download_video(background_tasks: BackgroundTasks, url: str = Form(...)
                     'postprocessor_args': ['-c:v', 'libx264', '-c:a', 'aac', '-pix_fmt', 'yuv420p']
                 })
 
+        # Общий запуск скачивания для всех форматов
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
 
@@ -237,6 +221,7 @@ async def download_video(background_tasks: BackgroundTasks, url: str = Form(...)
             filename=download_name,
             media_type="audio/mpeg" if mode == "audio" else "video/mp4"
         )
+
     except Exception as e:
         traceback.print_exc()
         return {"error": f"Ошибка: {str(e)}"}
