@@ -145,7 +145,7 @@ async def download_video(background_tasks: BackgroundTasks, url: str = Form(...)
         output_filename = f"file_{temp_id}.{ext}"
         full_path = os.path.join(DOWNLOAD_DIR, output_filename)
 
-        ffmpeg_path = os.path.join(os.getcwd(), "ffmpeg.exe") if platform.system() == "Windows" else "ffmpeg"
+        ffmpeg_path = "ffmpeg"
 
         ydl_opts = {
             'outtmpl': full_path,
@@ -154,7 +154,7 @@ async def download_video(background_tasks: BackgroundTasks, url: str = Form(...)
             'quiet': False,
             'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
             'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
-            
+            'ffmpeg_location': ffmpeg_path,
         }
 
         if mode == "audio":
