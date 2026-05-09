@@ -139,27 +139,26 @@ async def get_formats(url: str = Form(...)):
 async def download_video(background_tasks: BackgroundTasks, url: str = Form(...), format_id: str = Form(...), mode: str = Form(...)):
     try:
         is_vk = any(site in url for site in ["vk.com", "vk.ru", "vkvideo.ru"])
+        is_rutube = "rutube.ru" in url
 
         temp_id = uuid.uuid4().hex[:8]
-        ext = "mp3" if mode == "audio" else "mp4"
-        output_filename = f"file_{temp_id}.{ext}"
-        full_path = os.path.join(DOWNLOAD_DIR, output_filename)
-
-        ffmpeg_path = "ffmpeg"
+        
+        # КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ 1: %(ext)s разрешает yt-dlp самому менять расширение.
+        # Это лечит ошибку скачивания аудио!
+        outtmpl = os.path.join(DOWNLOAD_DIR, f"file_{temp_id}.%(ext)s")
 
         ydl_opts = {
-            'outtmpl': full_path,
+            'outtmpl': outtmpl,
             'nopart': True,
             'nocheckcertificate': True,
             'quiet': False,
             'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
-            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
-            'ffmpeg_location': ffmpeg_path,
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'ffmpeg_location': "ffmpeg",
         }
 
         if mode == "audio":
             ydl_opts.update({
-                # bestaudio/best скачает лучший звук, а FFmpegExtractAudio переконвертирует его в mp3
                 'format': 'bestaudio/best',
                 'postprocessors': [{
                     'key': 'FFmpegExtractAudio',
@@ -167,59 +166,67 @@ async def download_video(background_tasks: BackgroundTasks, url: str = Form(...)
                     'preferredquality': '192',
                 }],
             })
-
+            
         elif mode == "video_only":
-            if is_vk or "rutube.ru" in url:
-                ydl_opts.update({
-                    'format': 'best' if "rutube.ru" in url else format_id,
-                    'merge_output_format': 'mp4',
-                    # ИСПРАВЛЕНИЕ: Говорим yt-dlp самому убрать аудио (-an) без использования subprocess
-                    'postprocessor_args': ['-an', '-c:v', 'copy']
-                })
+            if is_vk or is_rutube:
+                # Качаем лучший вариант, звук вырежем на 3-м шаге
+                ydl_opts.update({'format': 'best' if is_rutube else format_id})
             else:
-                ydl_opts.update({
-                    'format': f'bestvideo[height<={format_id}]',
-                    'postprocessor_args': ['-an', '-c:v', 'libx264', '-pix_fmt', 'yuv420p']
-                })
-
-        else: # Full Video
+                ydl_opts.update({'format': f'bestvideo[height<={format_id}]'})
+                
+        else: # Full video
             if is_vk:
-                ydl_opts.update({
-                    'format': format_id,
-                    'merge_output_format': 'mp4',
-                })
-            elif "rutube.ru" in url:
-                ydl_opts.update({
-                    'format': 'best',
-                    'merge_output_format': 'mp4',
-                })
+                ydl_opts.update({'format': format_id, 'merge_output_format': 'mp4'})
+            elif is_rutube:
+                ydl_opts.update({'format': 'best', 'merge_output_format': 'mp4'})
             else:
                 ydl_opts.update({
                     'format': f'bestvideo[height<={format_id}]+bestaudio/best',
-                    'merge_output_format': 'mp4',
-                    'postprocessor_args': ['-c:v', 'libx264', '-c:a', 'aac', '-pix_fmt', 'yuv420p']
+                    'merge_output_format': 'mp4'
                 })
 
-        # Общий запуск скачивания для всех форматов
+        # 1. Запуск скачивания
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
 
-        actual_file = full_path
-        if not os.path.exists(full_path):
-            found = glob.glob(os.path.join(DOWNLOAD_DIR, f"file_{temp_id}.*"))
-            if found:
-                actual_file = found[0]
-            else:
-                return {"error": "Файл не создался. Проверьте наличие FFmpeg."}
+        # 2. Ищем скачанный файл (отбрасываем временные .part файлы)
+        found_files = glob.glob(os.path.join(DOWNLOAD_DIR, f"file_{temp_id}.*"))
+        found_files = [f for f in found_files if not f.endswith('.part') and not f.endswith('.ytdl')]
+        
+        if not found_files:
+            return {"error": "Файл не создался. Возможно, видео защищено."}
+            
+        actual_file = found_files[0]
+        final_file = actual_file
+        media_type = "video/mp4"
 
-        download_name = f"{mode}_{temp_id}.{ext}"
+        # 3. Точечная обработка
+        if mode == "audio":
+            # yt-dlp уже сделал его mp3
+            media_type = "audio/mpeg"
+            
+        elif mode == "video_only" and (is_vk or is_rutube):
+            # КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ 2: Гарантированно вырезаем звук.
+            # -c:v copy переносит видео без пережатия (не грузит сервер).
+            final_file = os.path.join(DOWNLOAD_DIR, f"silent_{temp_id}.mp4")
+            subprocess.run([
+                "ffmpeg", "-y", "-i", actual_file,
+                "-an", "-c:v", "copy",
+                final_file
+            ], check=True)
+            os.remove(actual_file) # Удаляем исходник со звуком
 
-        background_tasks.add_task(lambda f: (time.sleep(600), os.remove(f) if os.path.exists(f) else None), actual_file)
+        # Получаем реальное расширение для выдачи пользователю
+        _, actual_ext = os.path.splitext(final_file)
+        download_name = f"{mode}_{temp_id}{actual_ext}"
+
+        # 4. Планируем удаление
+        background_tasks.add_task(lambda f: (time.sleep(600), os.remove(f) if os.path.exists(f) else None), final_file)
 
         return FileResponse(
-            actual_file,
+            final_file,
             filename=download_name,
-            media_type="audio/mpeg" if mode == "audio" else "video/mp4"
+            media_type=media_type
         )
 
     except Exception as e:
