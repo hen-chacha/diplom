@@ -142,9 +142,7 @@ async def download_video(background_tasks: BackgroundTasks, url: str = Form(...)
         is_rutube = "rutube.ru" in url
 
         temp_id = uuid.uuid4().hex[:8]
-        
-        # КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ 1: %(ext)s разрешает yt-dlp самому менять расширение.
-        # Это лечит ошибку скачивания аудио!
+        # Используем универсальный шаблон, чтобы yt-dlp сам управлял расширениями
         outtmpl = os.path.join(DOWNLOAD_DIR, f"file_{temp_id}.%(ext)s")
 
         ydl_opts = {
@@ -155,8 +153,10 @@ async def download_video(background_tasks: BackgroundTasks, url: str = Form(...)
             'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
             'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'ffmpeg_location': "ffmpeg",
+            'referer': url, # Важно для ВК
         }
 
+        # --- НАСТРОЙКА РЕЖИМОВ ---
         if mode == "audio":
             ydl_opts.update({
                 'format': 'bestaudio/best',
@@ -168,11 +168,17 @@ async def download_video(background_tasks: BackgroundTasks, url: str = Form(...)
             })
             
         elif mode == "video_only":
+            # Для ВК и Рутуба качаем видео и СРАЗУ через настройки просим убрать звук
             if is_vk or is_rutube:
-                # Качаем лучший вариант, звук вырежем на 3-м шаге
-                ydl_opts.update({'format': 'best' if is_rutube else format_id})
+                ydl_opts.update({
+                    'format': 'best' if is_rutube else format_id,
+                    'postprocessor_args': ['-an'], # Команда FFmpeg: "убрать аудио"
+                })
             else:
-                ydl_opts.update({'format': f'bestvideo[height<={format_id}]'})
+                ydl_opts.update({
+                    'format': f'bestvideo[height<={format_id}]',
+                    'postprocessor_args': ['-an'],
+                })
                 
         else: # Full video
             if is_vk:
@@ -185,53 +191,40 @@ async def download_video(background_tasks: BackgroundTasks, url: str = Form(...)
                     'merge_output_format': 'mp4'
                 })
 
-        # 1. Запуск скачивания
+        # --- ИСПОЛНЕНИЕ ---
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
 
-        # 2. Ищем скачанный файл (отбрасываем временные .part файлы)
+        # Ищем файл (учитываем, что расширение может измениться после FFmpeg)
         found_files = glob.glob(os.path.join(DOWNLOAD_DIR, f"file_{temp_id}.*"))
-        found_files = [f for f in found_files if not f.endswith('.part') and not f.endswith('.ytdl')]
+        # Убираем мусорные файлы
+        actual_files = [f for f in found_files if not f.endswith(('.part', '.ytdl'))]
         
-        if not found_files:
-            return {"error": "Файл не создался. Возможно, видео защищено."}
+        if not actual_files:
+            return {"error": "Сервер не смог создать файл. Попробуйте другое качество."}
             
-        actual_file = found_files[0]
-        final_file = actual_file
-        media_type = "video/mp4"
+        final_file = actual_files[0]
+        
+        # Определяем правильный media_type
+        if final_file.endswith(".mp3"):
+            m_type = "audio/mpeg"
+        else:
+            m_type = "video/mp4"
 
-        # 3. Точечная обработка
-        if mode == "audio":
-            # yt-dlp уже сделал его mp3
-            media_type = "audio/mpeg"
-            
-        elif mode == "video_only" and (is_vk or is_rutube):
-            # КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ 2: Гарантированно вырезаем звук.
-            # -c:v copy переносит видео без пережатия (не грузит сервер).
-            final_file = os.path.join(DOWNLOAD_DIR, f"silent_{temp_id}.mp4")
-            subprocess.run([
-                "ffmpeg", "-y", "-i", actual_file,
-                "-an", "-c:v", "copy",
-                final_file
-            ], check=True)
-            os.remove(actual_file) # Удаляем исходник со звуком
+        download_name = f"{mode}_{temp_id}{os.path.splitext(final_file)[1]}"
 
-        # Получаем реальное расширение для выдачи пользователю
-        _, actual_ext = os.path.splitext(final_file)
-        download_name = f"{mode}_{temp_id}{actual_ext}"
-
-        # 4. Планируем удаление
+        # Чистим за собой через 10 минут
         background_tasks.add_task(lambda f: (time.sleep(600), os.remove(f) if os.path.exists(f) else None), final_file)
 
         return FileResponse(
             final_file,
             filename=download_name,
-            media_type=media_type
+            media_type=m_type
         )
 
     except Exception as e:
         traceback.print_exc()
-        return {"error": f"Ошибка: {str(e)}"}
+        return {"error": f"Ошибка сервера: {str(e)}"}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=7860)
