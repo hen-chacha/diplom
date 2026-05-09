@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>VidFlow</title>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --primary: #7c6aff;
+            --primary-glow: rgba(124,106,255,0.35);
+            --bg: #07090f;
+            --card-bg: rgba(14,18,32,0.92);
+            --text: #f0f2ff;
+            --muted: #6b7280;
+            --border: rgba(255,255,255,0.07);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            min-height: 100vh;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            position: relative;
+        }
+        canvas#bg {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+        }
+        .trend-column {
+            position: fixed;
+            top: 0;
+            width: 155px;
+            height: 100vh;
+            z-index: 1;
+            opacity: 0.5;
+            overflow: hidden;
+        }
+        .left-col  { left: 18px; }
+        .right-col { right: 18px; }
+        .trend-track {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .left-col  .trend-track { animation: scroll-up 38s linear infinite; }
+        .right-col .trend-track { animation: scroll-up 52s linear infinite reverse; }
+        @keyframes scroll-up {
+            0%   { transform: translateY(0); }
+            100% { transform: translateY(-50%); }
+        }
+        .trend-item {
+            width: 100%;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: 0.2s;
+            background: #0d1120;
+        }
+        .trend-item:hover {
+            transform: scale(1.05);
+            border-color: var(--primary);
+            filter: brightness(1.15);
+        }
+        .trend-item img {
+            width: 100%;
+            aspect-ratio: 16/9;
+            object-fit: cover;
+            display: block;
+        }
+        .trend-placeholder {
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: linear-gradient(135deg, #0d1120, #1a2240);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            opacity: 0.25;
+            color: white;
+        }
+        .card {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            max-width: 450px;
+            padding: 36px 32px 28px;
+            border-radius: 24px;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            backdrop-filter: blur(24px);
+            box-shadow: 0 0 0 1px rgba(124,106,255,0.08), 0 32px 64px rgba(0,0,0,0.6);
+        }
+        .logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 6px;
+        }
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: var(--primary);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 18px var(--primary-glow);
+        }
+        .logo-text {
+            font-family: 'Syne', sans-serif;
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #fff 40%, #a09aff);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle {
+            text-align: center;
+            color: var(--muted);
+            font-size: 13px;
+            margin-bottom: 24px;
+        }
+        .url-wrap { position: relative; }
+        .url-wrap input {
+            width: 100%;
+            padding: 13px 16px 13px 42px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: rgba(6,9,20,0.8);
+            color: var(--text);
+            font-size: 13px;
+            font-family: 'Inter', sans-serif;
+            outline: none;
+            transition: 0.2s;
+        }
+        .url-wrap input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-glow);
+        }
+        .url-icon {
+            position: absolute;
+            left: 13px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--muted);
+            display: flex;
+        }
+        #preview-img {
+            width: 100%;
+            border-radius: 12px;
+            margin-bottom: 12px;
+            display: none;
+            border: 1px solid var(--border);
+        }
+        #video-title {
+            text-align: left;
+            font-size: 15px;
+            font-weight: 600;
+            line-height: 1.4;
+            margin-bottom: 14px;
+            display: none;
+            overflow: hidden;
+            -webkit-line-clamp: 2;
+            line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+        #settings { display: none; }
+        .tabs {
+            display: flex;
+            gap: 5px;
+            margin-top: 16px;
+            background: rgba(0,0,0,0.3);
+            padding: 4px;
+            border-radius: 12px;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 10px 8px;
+            border-radius: 9px;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            font-size: 12px;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            color: var(--muted);
+            background: transparent;
+            transition: 0.2s;
+        }
+        .tab-btn.active {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 4px 14px var(--primary-glow);
+        }
+        select {
+            width: 100%;
+            padding: 12px 14px;
+            margin-top: 10px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: rgba(6,9,20,0.8);
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            outline: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            background-size: 16px;
+        }
+        #downloadBtn {
+            width: 100%;
+            padding: 14px;
+            margin-top: 12px;
+            border-radius: 12px;
+            border: none;
+            background: var(--primary);
+            color: white;
+            font-family: 'Syne', sans-serif;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: 0.2s;
+            box-shadow: 0 6px 20px var(--primary-glow);
+            letter-spacing: 0.3px;
+        }
+        #downloadBtn:hover { transform: translateY(-2px); filter: brightness(1.1); }
+        #downloadBtn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .loader {
+            display: none;
+            height: 3px;
+            margin-top: 16px;
+            overflow: hidden;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.06);
+        }
+        .loader-bar {
+            width: 30%;
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), #a09aff);
+            animation: loading 1.4s linear infinite;
+            border-radius: 10px;
+        }
+        @keyframes loading {
+            0%   { transform: translateX(-100%); }
+            100% { transform: translateX(400%); }
+        }
+        #status {
+            margin-top: 14px;
+            font-size: 12px;
+            color: var(--muted);
+            text-align: center;
+        }
+        @media (max-width: 600px) {
+    .trend-column {
+        display: none;
+    }
+    body {
+        align-items: flex-start;
+        overflow-y: auto;
+        padding: 20px 16px 40px;
+    }
+    .card {
+        max-width: 100%;
+        padding: 24px 20px 20px;
+        border-radius: 20px;
+        margin-top: 20px;
+    }
+    .logo h1, .logo-text {
+        font-size: 22px;
+    }
+    .logo-icon {
+        width: 30px;
+        height: 30px;
+    }
+    .tab-btn {
+        font-size: 11px;
+        padding: 9px 4px;
+    }
+    #preview-img {
+        max-height: 200px;
+    }
+    #downloadBtn {
+        font-size: 14px;
+        padding: 13px;
+    }
+}
+    </style>
+</head>
+<body>
+
+<canvas id="bg"></canvas>
+
+<div class="trend-column left-col">
+    <div class="trend-track" id="lTrack"></div>
+</div>
+<div class="trend-column right-col">
+    <div class="trend-track" id="rTrack"></div>
+</div>
+
+<div class="card">
+    <div class="logo">
+        <div class="logo-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+        </div>
+        <span class="logo-text">VidFlow</span>
+    </div>
+    <p class="subtitle">Скачивай видео с разных платформ в любом формате</p>
+
+    <img id="preview-img" alt="preview">
+    <div id="video-title"></div>
+
+    <div class="url-wrap">
+        <span class="url-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+            </svg>
+        </span>
+        <input type="text" id="urlInput" placeholder="https://rutube.ru/video/...">
+    </div>
+
+    <div id="settings">
+        <div class="tabs">
+            <button class="tab-btn active" onclick="setMode(this,'full')">
+                <i data-lucide="video" size="14"></i> Видео
+            </button>
+            <button class="tab-btn" onclick="setMode(this,'audio')">
+                <i data-lucide="music" size="14"></i> Звук
+            </button>
+            <button class="tab-btn" onclick="setMode(this,'video_only')">
+                <i data-lucide="volume-x" size="14"></i> Без звука
+            </button>
+        </div>
+        <select id="fmt"></select>
+        <button id="downloadBtn" onclick="download()">
+            <i data-lucide="download" size="16"></i>
+            Скачать
+        </button>
+    </div>
+
+    <div class="loader" id="ld"><div class="loader-bar"></div></div>
+    <div id="status">Вставьте ссылку или выберите видео из ленты</div>
+</div>
+
+<script>
+lucide.createIcons();
+let mode = 'full';
+
+/* ── Анимированный фон: частицы + линии ── */
+(function() {
+    const canvas = document.getElementById('bg');
+    const ctx = canvas.getContext('2d');
+    let W, H;
+
+    function resize() {
+        W = canvas.width  = window.innerWidth;
+        H = canvas.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    const COLORS = ['#7c6aff','#a09aff','#4f46e5','#6366f1','#8b5cf6'];
+    function rand(a, b) { return a + Math.random() * (b - a); }
+
+    const particles = Array.from({length: 55}, () => ({
+        x: rand(0, window.innerWidth),
+        y: rand(0, window.innerHeight),
+        vx: rand(-0.25, 0.25),
+        vy: rand(-0.25, 0.25),
+        r: rand(1.5, 3.5),
+        color: COLORS[Math.floor(Math.random() * COLORS.length)],
+        alpha: rand(0.3, 0.8),
+    }));
+
+    function draw() {
+        ctx.clearRect(0, 0, W, H);
+
+        for (let i = 0; i < particles.length; i++) {
+            for (let j = i + 1; j < particles.length; j++) {
+                const dx = particles[i].x - particles[j].x;
+                const dy = particles[i].y - particles[j].y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < 130) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = `rgba(124,106,255,${0.12 * (1 - dist/130)})`;
+                    ctx.lineWidth = 0.8;
+                    ctx.moveTo(particles[i].x, particles[i].y);
+                    ctx.lineTo(particles[j].x, particles[j].y);
+                    ctx.stroke();
+                }
+            }
+        }
+
+        for (const p of particles) {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            ctx.fillStyle = p.color;
+            ctx.globalAlpha = p.alpha;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+            p.x += p.vx;
+            p.y += p.vy;
+            if (p.x < 0) p.x = W;
+            if (p.x > W) p.x = 0;
+            if (p.y < 0) p.y = H;
+            if (p.y > H) p.y = 0;
+        }
+
+        requestAnimationFrame(draw);
+    }
+    draw();
+})();
+
+/* ── Тренды ── */
+async function loadTrends() {
+    const left  = document.getElementById('lTrack');
+    const right = document.getElementById('rTrack');
+
+    try {
+        const res  = await fetch('/get_trending');
+        const data = await res.json();
+
+        if (!data.videos || data.videos.length === 0) {
+            left.innerHTML = '<div style="color:#6b7280;padding:20px;font-size:11px;">Нет трендов</div>';
+            return;
+        }
+
+        function createItem(v) {
+            const div = document.createElement('div');
+            div.className = 'trend-item';
+
+            const img = document.createElement('img');
+            img.referrerPolicy = 'no-referrer';
+            img.alt = v.title || '';
+
+            img.onerror = () => {
+                img.remove();
+                const ph = document.createElement('div');
+                ph.className = 'trend-placeholder';
+                ph.textContent = '▶';
+                div.appendChild(ph);
+            };
+            img.src = v.thumbnail;
+            div.appendChild(img);
+            div.onclick = () => use(v.url);
+            return div;
+        }
+
+        left.innerHTML = '';
+        right.innerHTML = '';
+
+        [...data.videos, ...data.videos].forEach(v => left.appendChild(createItem(v)));
+
+        const shuffled = [...data.videos].sort(() => Math.random() - 0.5);
+        [...shuffled, ...shuffled].forEach(v => right.appendChild(createItem(v)));
+
+    } catch(e) {
+        console.error(e);
+    }
+}
+
+function use(url) {
+    document.getElementById('urlInput').value = url;
+    analyze();
+}
+
+async function analyze() {
+    const url = document.getElementById('urlInput').value;
+    if (url.length < 10) return;
+
+    document.getElementById('status').innerText = 'Анализируем...';
+    const fd = new FormData();
+    fd.append('url', url);
+
+    try {
+        const r = await fetch('/get_formats', { method: 'POST', body: fd });
+        const d = await r.json();
+
+        if (d.formats) {
+            const img = document.getElementById('preview-img');
+            img.src = d.thumbnail;
+            img.style.display = 'block';
+
+            const titleDiv = document.getElementById('video-title');
+            titleDiv.innerText = d.title;
+            titleDiv.style.display = '-webkit-box';
+
+            document.getElementById('settings').style.display = 'block';
+            document.getElementById('fmt').innerHTML =
+                d.formats.map(f => `<option value="${f.id}">${f.res}</option>`).join('');
+            document.getElementById('status').innerText = 'Готово';
+        }
+    } catch(e) {
+        document.getElementById('status').innerText = 'Ошибка анализа';
+    }
+}
+
+document.getElementById('urlInput').oninput = () => {
+    const url = document.getElementById('urlInput').value;
+    if (url.length < 10) {
+        document.getElementById('preview-img').style.display = 'none';
+        document.getElementById('video-title').style.display = 'none';
+        document.getElementById('settings').style.display = 'none';
+        document.getElementById('status').innerText = 'Вставьте ссылку или выберите видео из ленты';
+    } else {
+        analyze();
+    }
+};
+
+function setMode(el, m) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+    mode = m;
+    document.getElementById('fmt').style.display = m === 'audio' ? 'none' : 'block';
+}
+
+async function download() {
+    const btn = document.getElementById('downloadBtn');
+    btn.disabled = true;
+    document.getElementById('ld').style.display = 'block';
+    document.getElementById('status').innerText = 'Скачиваем...';
+
+    const fd = new FormData();
+    fd.append('url',       document.getElementById('urlInput').value);
+    fd.append('format_id', document.getElementById('fmt').value);
+    fd.append('mode',      mode);
+
+    try {
+        const r = await fetch('/download', { method: 'POST', body: fd });
+        const b = await r.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(b);
+        a.download = mode === 'audio' ? 'audio.mp3' : 'video.mp4';
+        a.click();
+        document.getElementById('status').innerText = '✓ Файл готов!';
+    } catch(e) {
+        document.getElementById('status').innerText = 'Ошибка загрузки';
+    } finally {
+        btn.disabled = false;
+        document.getElementById('ld').style.display = 'none';
+    }
+}
+
+loadTrends();
+</script>
+</body>
+</html>
