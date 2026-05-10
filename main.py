@@ -55,39 +55,18 @@ async def home(request: Request):
 
 @app.get("/get_trending")
 async def get_trending():
-    ids = [
-        "fbedbdcadebc7273fa7fcae3a7bec09c",
-        "ac04fc8d0017f2f4090c8a2f7d177ccf",
-        "7fd05a44ee06beb5ca93ef48c4e6d32a",
-        "39d8cbcd75d46956d6b1468a99092a56",
-        "3e6f641d551d32e5bd9503a8ab352748",
-        "36d7548641b3dbacff83c23da170626d",
-        "d2ef72b1f6da86c895f4600dd4641fc8",
-        "41606614d91a06a0400ee7522a29a702",
-        "28beaf4910d912d9a4ad37e218bb2b12",
-        "b2e17e8c8bcb49b1eab878e9aace139a",
+    videos = [
+        {"title": "Проблема Вольво оказалась слишком банальной", "thumbnail": "https://pic.rtbcdn.ru/video/2026-05-08/48/34/48349de84176b8c658697a7ed42685d3.jpg", "url": "https://rutube.ru/video/fbedbdcadebc7273fa7fcae3a7bec09c/"},
+        {"title": "КАБРИО ЛЕТО. Дороже = лучше? BMW M8, Mercedes", "thumbnail": "https://pic.rtbcdn.ru/video/2026-05-07/f9/97/f9975888741688c242e948269ec21020.jpg", "url": "https://rutube.ru/video/ac04fc8d0017f2f4090c8a2f7d177ccf/"},
+        {"title": "«Молокозавод» победил: Инженерное решение", "thumbnail": "https://pic.rtbcdn.ru/video/2026-05-08/c5/91/c591b490553f2af1d1af2fb0acc4304a.jpg", "url": "https://rutube.ru/video/7fd05a44ee06beb5ca93ef48c4e6d32a/"},
+        {"title": "Привезли мебель для дачи", "thumbnail": "https://pic.rtbcdn.ru/video/2026-05-07/97/ed/97ed1d307c78d3d9a930e189b578b769.jpg", "url": "https://rutube.ru/video/39d8cbcd75d46956d6b1468a99092a56/"},
+        {"title": "Rezvani Vengeance - бронированный внедорожник", "thumbnail": "https://pic.rtbcdn.ru/video/2026-05-05/d0/d7/d0d77060d83a6c4591b574bc0d7a1a32.jpg", "url": "https://rutube.ru/video/3e6f641d551d32e5bd9503a8ab352748/"},
+        {"title": "Жизнь на пенсии. Смотрела спортивные соревнования", "thumbnail": "https://pic.rtbcdn.ru/video/2026-05-08/8e/b9/8eb9b39addb15c8b02a3ee270944c935.jpg", "url": "https://rutube.ru/video/36d7548641b3dbacff83c23da170626d/"},
+        {"title": "Покупаем саженцы и рассаду. Начинаем высадку", "thumbnail": "https://pic.rtbcdn.ru/video/2026-05-08/4d/bf/4dbfa99cd0fc049d0062a19d5eecd711.jpg", "url": "https://rutube.ru/video/d2ef72b1f6da86c895f4600dd4641fc8/"},
+        {"title": "Приехали дети и внуки. Неожиданная помощь", "thumbnail": "https://pic.rtbcdn.ru/video/2026-05-08/d3/01/d3015e571b0296df4968586934708555.jpg", "url": "https://rutube.ru/video/41606614d91a06a0400ee7522a29a702/"},
+        {"title": "Volonaut Airbike — ховербайк на реактивной тяге", "thumbnail": "https://pic.rtbcdn.ru/video/2026-05-05/03/e2/03e2c35dbb76c51eb9dcc4790986bf81.jpg", "url": "https://rutube.ru/video/28beaf4910d912d9a4ad37e218bb2b12/"},
+        {"title": "Здоровая спина. Как убрать боль в пояснице", "thumbnail": "https://pic.rtbcdn.ru/video/2026-05-06/1c/bb/1cbb13b10853fdf35e4fb3ebe2a7cf66.jpg", "url": "https://rutube.ru/video/b2e17e8c8bcb49b1eab878e9aace139a/"},
     ]
-    
-    ydl_opts = {
-        'quiet': True,
-        'nocheckcertificate': True,
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    }
-    
-    videos = []
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        for vid_id in ids:
-            try:
-                url = f"https://rutube.ru/video/{vid_id}/"
-                info = ydl.extract_info(url, download=False)
-                videos.append({
-                    "title": (info.get("title") or "Видео")[:60],
-                    "thumbnail": info.get("thumbnail", ""),
-                    "url": url,
-                })
-            except:
-                pass
-    
     return {"videos": videos}
 
 @app.post("/get_formats")
@@ -110,15 +89,11 @@ async def get_formats(url: str = Form(...)):
                 if height and vcodec not in ('none', None):
                     res_label = f"{height}p"
                     formats.append({"id": fid, "res": res_label, "h": height})
+
             if not formats:
                 for f in info.get('formats', []):
                     if f.get('acodec') != 'none':
                         formats.append({"id": f.get('format_id', 'bestaudio'), "res": "Audio", "h": 0})
-                else:
-                    vcodec = f.get('vcodec', 'none')
-                    acodec = f.get('acodec', 'none')
-                    if height and vcodec not in ('none', None) and height >= 144:
-                        formats.append({"id": str(height), "res": f"{height}p", "h": height})
 
             if not formats:
                 formats = [
@@ -149,7 +124,6 @@ async def download_video(background_tasks: BackgroundTasks, url: str = Form(...)
         is_rutube = "rutube.ru" in url
 
         temp_id = uuid.uuid4().hex[:8]
-        # Используем универсальный шаблон, чтобы yt-dlp сам управлял расширениями
         outtmpl = os.path.join(DOWNLOAD_DIR, f"file_{temp_id}.%(ext)s")
 
         ydl_opts = {
@@ -159,10 +133,9 @@ async def download_video(background_tasks: BackgroundTasks, url: str = Form(...)
             'quiet': False,
             'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
             'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'referer': url, # Важно для ВК
+            'referer': url,
         }
 
-        # --- НАСТРОЙКА РЕЖИМОВ ---
         if mode == "audio":
             ydl_opts.update({
                 'format': 'bestaudio/best',
@@ -172,7 +145,7 @@ async def download_video(background_tasks: BackgroundTasks, url: str = Form(...)
                     'preferredquality': '192',
                 }],
             })
-            
+
         elif mode == "video_only":
             if is_vk or is_rutube:
                 ydl_opts.update({
@@ -184,38 +157,37 @@ async def download_video(background_tasks: BackgroundTasks, url: str = Form(...)
                     'format': f'bestvideo[height<={format_id}]',
                     'postprocessor_args': ['-an'],
                 })
-                
-        else: # Full video
-    if is_vk:
-        ydl_opts.update({
-            'format': f"{format_id}+bestaudio/best",
-            'merge_output_format': 'mp4',
-            'postprocessor_args': ['-c:v', 'copy', '-c:a', 'aac']
-        })
-    elif is_rutube:
-        ydl_opts.update({'format': 'best', 'merge_output_format': 'mp4'})
-    else:
-        ydl_opts.update({
-            'format': f'bestvideo[height<={format_id}]+bestaudio/best',
-            'merge_output_format': 'mp4',
-            'postprocessor_args': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k']
-        })
 
-        # --- ИСПОЛНЕНИЕ ---
+        else:  # Full video
+            if is_vk:
+                ydl_opts.update({
+                    'format': f"{format_id}+bestaudio/best",
+                    'merge_output_format': 'mp4',
+                    'postprocessor_args': ['-c:v', 'copy', '-c:a', 'aac']
+                })
+            elif is_rutube:
+                ydl_opts.update({
+                    'format': 'best',
+                    'merge_output_format': 'mp4'
+                })
+            else:
+                ydl_opts.update({
+                    'format': f'bestvideo[height<={format_id}]+bestaudio/best',
+                    'merge_output_format': 'mp4',
+                    'postprocessor_args': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k']
+                })
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
 
-        # Ищем файл (учитываем, что расширение может измениться после FFmpeg)
         found_files = glob.glob(os.path.join(DOWNLOAD_DIR, f"file_{temp_id}.*"))
-        # Убираем мусорные файлы
         actual_files = [f for f in found_files if not f.endswith(('.part', '.ytdl'))]
-        
+
         if not actual_files:
             return {"error": "Сервер не смог создать файл. Попробуйте другое качество."}
-            
+
         final_file = actual_files[0]
-        
-        # Определяем правильный media_type
+
         if final_file.endswith(".mp3"):
             m_type = "audio/mpeg"
         else:
@@ -223,7 +195,6 @@ async def download_video(background_tasks: BackgroundTasks, url: str = Form(...)
 
         download_name = f"{mode}_{temp_id}{os.path.splitext(final_file)[1]}"
 
-        # Чистим за собой через 10 минут
         background_tasks.add_task(lambda f: (time.sleep(600), os.remove(f) if os.path.exists(f) else None), final_file)
 
         return FileResponse(
