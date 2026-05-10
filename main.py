@@ -181,10 +181,11 @@ async def download_video(background_tasks: BackgroundTasks, url: str = Form(...)
                     'postprocessor_args': ['-an'], # Команда FFmpeg: "убрать аудио"
                 })
             else:
-                ydl_opts.update({
-                    'format': f'bestvideo[height<={format_id}]',
-                    'postprocessor_args': ['-an'],
-                })
+    ydl_opts.update({
+        'format': f'bestvideo[height<={format_id}]+bestaudio/best',
+        'merge_output_format': 'mp4',
+        'postprocessor_args': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k']
+    })
                 
         else: # Full video
             if is_vk:
