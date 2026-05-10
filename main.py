@@ -106,9 +106,9 @@ async def get_formats(url: str = Form(...)):
             for f in info.get('formats', []):
                 fid = f.get('format_id', '')
                 height = f.get('height')
-                if is_vk:
-                    if fid.startswith('url') and height:
-                        formats.append({"id": fid, "res": f"{height}p", "h": height})
+                if height or f.get('acodec') != 'none':
+                    res_label = f"{height}p" if height else "Audio"
+                    formats.append({"id": fid, "res": res_label, "h": height or 0})
                 else:
                     vcodec = f.get('vcodec', 'none')
                     acodec = f.get('acodec', 'none')
@@ -138,6 +138,8 @@ async def get_formats(url: str = Form(...)):
 @app.post("/download")
 async def download_video(background_tasks: BackgroundTasks, url: str = Form(...), format_id: str = Form(...), mode: str = Form(...)):
     try:
+        print("--- Проверка FFmpeg перед загрузкой ---")
+        os.system("ffmpeg -version")
         is_vk = any(site in url for site in ["vk.com", "vk.ru", "vkvideo.ru"])
         is_rutube = "rutube.ru" in url
 
@@ -152,7 +154,6 @@ async def download_video(background_tasks: BackgroundTasks, url: str = Form(...)
             'quiet': False,
             'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
             'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'ffmpeg_location': "ffmpeg",
             'referer': url, # Важно для ВК
         }
 
