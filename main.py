@@ -174,33 +174,32 @@ async def download_video(background_tasks: BackgroundTasks, url: str = Form(...)
             })
             
         elif mode == "video_only":
-            # Для ВК и Рутуба качаем видео и СРАЗУ через настройки просим убрать звук
             if is_vk or is_rutube:
                 ydl_opts.update({
                     'format': 'best' if is_rutube else format_id,
-                    'postprocessor_args': ['-an'], # Команда FFmpeg: "убрать аудио"
+                    'postprocessor_args': ['-an'],
                 })
             else:
-    ydl_opts.update({
-        'format': f'bestvideo[height<={format_id}]+bestaudio/best',
-        'merge_output_format': 'mp4',
-        'postprocessor_args': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k']
-    })
+                ydl_opts.update({
+                    'format': f'bestvideo[height<={format_id}]',
+                    'postprocessor_args': ['-an'],
+                })
                 
         else: # Full video
-            if is_vk:
-                ydl_opts.update({
-                    'format': f"{format_id}+bestaudio/best",
-                    'merge_output_format': 'mp4',
-                    'postprocessor_args': ['-c:v', 'copy', '-c:a', 'aac']
-                })
-            elif is_rutube:
-                ydl_opts.update({'format': 'best', 'merge_output_format': 'mp4'})
-            else:
-                ydl_opts.update({
-                    'format': f'bestvideo[height<={format_id}]+bestaudio/best',
-                    'merge_output_format': 'mp4'
-                })
+    if is_vk:
+        ydl_opts.update({
+            'format': f"{format_id}+bestaudio/best",
+            'merge_output_format': 'mp4',
+            'postprocessor_args': ['-c:v', 'copy', '-c:a', 'aac']
+        })
+    elif is_rutube:
+        ydl_opts.update({'format': 'best', 'merge_output_format': 'mp4'})
+    else:
+        ydl_opts.update({
+            'format': f'bestvideo[height<={format_id}]+bestaudio/best',
+            'merge_output_format': 'mp4',
+            'postprocessor_args': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k']
+        })
 
         # --- ИСПОЛНЕНИЕ ---
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
