@@ -556,18 +556,6 @@ async function download() {
 loadTrends();
 </script>
 
-<div id="debug" style="position:fixed;bottom:10px;left:10px;background:rgba(255,0,0,0.8);color:white;padding:8px;font-size:11px;z-index:9999;border-radius:4px;"></div>
 
-<script>
-function updateDebug() {
-    const d = document.getElementById('debug');
-    const w = window.innerWidth;
-    const cardWidth = document.querySelector('.card').offsetWidth;
-    const media = w <= 600 ? 'MOBILE' : 'DESKTOP';
-    d.innerHTML = `Screen: ${w}px<br>Card: ${cardWidth}px<br>Mode: ${media}`;
-}
-updateDebug();
-window.addEventListener('resize', updateDebug);
-</script>
 </body>
 </html>
