@@ -188,7 +188,11 @@ async def download_video(background_tasks: BackgroundTasks, url: str = Form(...)
                 
         else: # Full video
             if is_vk:
-                ydl_opts.update({'format': format_id, 'merge_output_format': 'mp4'})
+                ydl_opts.update({
+                    'format': f"{format_id}+bestaudio/best",
+                    'merge_output_format': 'mp4',
+                    'postprocessor_args': ['-c:v', 'copy', '-c:a', 'aac']
+                })
             elif is_rutube:
                 ydl_opts.update({'format': 'best', 'merge_output_format': 'mp4'})
             else:
