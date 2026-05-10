@@ -106,9 +106,14 @@ async def get_formats(url: str = Form(...)):
             for f in info.get('formats', []):
                 fid = f.get('format_id', '')
                 height = f.get('height')
-                if height or f.get('acodec') != 'none':
-                    res_label = f"{height}p" if height else "Audio"
-                    formats.append({"id": fid, "res": res_label, "h": height or 0})
+                vcodec = f.get('vcodec', 'none')
+                if height and vcodec not in ('none', None):
+                    res_label = f"{height}p"
+                    formats.append({"id": fid, "res": res_label, "h": height})
+            if not formats:
+                for f in info.get('formats', []):
+                    if f.get('acodec') != 'none':
+                        formats.append({"id": f.get('format_id', 'bestaudio'), "res": "Audio", "h": 0})
                 else:
                     vcodec = f.get('vcodec', 'none')
                     acodec = f.get('acodec', 'none')
