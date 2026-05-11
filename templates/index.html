@@ -488,6 +488,15 @@ async function analyze() {
         const r = await fetch('/get_formats', { method: 'POST', body: fd });
         const d = await r.json();
 
+        // Если сервер вернул ошибку (ссылка битая или сайт не поддерживается)
+        if (d.error) {
+            document.getElementById('status').innerText = d.error;
+            document.getElementById('settings').style.display = 'none';
+            document.getElementById('preview-img').style.display = 'none';
+            document.getElementById('video-title').style.display = 'none';
+            return;
+        }
+
         if (d.formats) {
             const img = document.getElementById('preview-img');
             img.src = d.thumbnail;
@@ -503,7 +512,7 @@ async function analyze() {
             document.getElementById('status').innerText = 'Готово';
         }
     } catch(e) {
-        document.getElementById('status').innerText = 'Ошибка анализа';
+        document.getElementById('status').innerText = 'Ошибка соединения с сервером';
     }
 }
 
@@ -539,12 +548,20 @@ async function download() {
 
     try {
         const r = await fetch('/download', { method: 'POST', body: fd });
-        const b = await r.blob();
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(b);
-        a.download = mode === 'audio' ? 'audio.mp3' : 'video.mp4';
-        a.click();
-        document.getElementById('status').innerText = '✓ Файл готов!';
+        
+        // Проверяем тип контента. Если вернулся JSON вместо файла — значит там ошибка.
+        const contentType = r.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+            const d = await r.json();
+            document.getElementById('status').innerText = d.error || 'Ошибка загрузки';
+        } else {
+            const b = await r.blob();
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(b);
+            a.download = mode === 'audio' ? 'audio.mp3' : 'video.mp4';
+            a.click();
+            document.getElementById('status').innerText = '✓ Файл готов!';
+        }
     } catch(e) {
         document.getElementById('status').innerText = 'Ошибка загрузки';
     } finally {
