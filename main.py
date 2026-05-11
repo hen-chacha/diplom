@@ -2,6 +2,7 @@ from fastapi import FastAPI, Form, Request, BackgroundTasks
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
+from yt_dlp.utils import DownloadError
 import yt_dlp
 import uvicorn
 import os
@@ -72,29 +73,48 @@ async def get_trending():
 @app.post("/get_formats")
 async def get_formats(url: str = Form(...)):
     try:
+        # Простейшая проверка на пустой ввод
+        url = url.strip()
+        if not url:
+            return {"error": "Введите ссылку"}
+
         ydl_opts = {
             'quiet': True,
+            'no_warnings': True,
             'nocheckcertificate': True,
             'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
         }
+        
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            is_vk = any(site in url for site in ["vk.com", "vk.ru", "vkvideo.ru"])
-            formats = []
+            # 1. Попытка извлечь данные с обработкой ошибок ссылки
+            try:
+                info = ydl.extract_info(url, download=False)
+            except DownloadError as e:
+                # Ошибка yt-dlp: видео не найдено, доступ ограничен или сайт не поддерживается
+                return {"error": "Видео не найдено или ссылка не поддерживается. Проверьте правильность URL."}
+            except Exception as e:
+                # Любая другая ошибка (проблемы с сетью и т.д.)
+                return {"error": f"Не удалось получить данные: {str(e)}"}
 
+            # 2. Обработка форматов
+            formats = []
             for f in info.get('formats', []):
                 fid = f.get('format_id', '')
                 height = f.get('height')
                 vcodec = f.get('vcodec', 'none')
+                
+                # Собираем только видео-потоки с высотой
                 if height and vcodec not in ('none', None):
                     res_label = f"{height}p"
                     formats.append({"id": fid, "res": res_label, "h": height})
 
+            # Если видео-форматов не нашлось, ищем аудио
             if not formats:
                 for f in info.get('formats', []):
                     if f.get('acodec') != 'none':
                         formats.append({"id": f.get('format_id', 'bestaudio'), "res": "Audio", "h": 0})
 
+            # Заглушка, если список всё равно пуст (для сложных случаев)
             if not formats:
                 formats = [
                     {"id": "1080", "res": "1080p", "h": 1080},
@@ -103,6 +123,7 @@ async def get_formats(url: str = Form(...)):
                     {"id": "360",  "res": "360p",  "h": 360},
                 ]
 
+            # Убираем дубликаты разрешений и сортируем по высоте
             unique_fmts = {f['res']: f for f in formats}.values()
             sorted_fmts = sorted(unique_fmts, key=lambda x: x['h'], reverse=True)
 
@@ -111,9 +132,10 @@ async def get_formats(url: str = Form(...)):
                 "formats": sorted_fmts,
                 "thumbnail": info.get('thumbnail')
             }
+
     except Exception as e:
         traceback.print_exc()
-        return {"error": f"Ошибка парсинга: {str(e)}"}
+        return {"error": f"Критическая ошибка сервера: {str(e)}"}
 
 @app.post("/download")
 async def download_video(background_tasks: BackgroundTasks, url: str = Form(...), format_id: str = Form(...), mode: str = Form(...)):
